@@ -25,8 +25,14 @@ namespace RagdollFight
         public float fixedTimestep = 0.01f;
 
         [Header("AI")]
-        [Tooltip("학습된 모델. 비워두면 Resources/FighterAI.onnx 를 쓴다.")]
-        public Unity.InferenceEngine.ModelAsset aiModel;
+        /// <summary>M 키로 고르는 AI 모델 (Assets/Resources/파일이름.onnx)</summary>
+        static readonly (string file, string label)[] AiModels =
+        {
+            ("AI_B", "보상 B"),
+            ("AI_A", "보상 A"),
+            ("AI_mix2", "mix2"),
+        };
+        int aiIndex;
 
         public FighterController[] Fighters { get; } = new FighterController[2];
 
@@ -86,20 +92,30 @@ namespace RagdollFight
                 case Opponent.RandomBot: Fighters[1].InputSource = new RandomBotInput(Fighters[1]); break;
                 case Opponent.AI:
                 case Opponent.Watch_AI_vs_Rush:
-                    if (aiModel == null) aiModel = Resources.Load<Unity.InferenceEngine.ModelAsset>("FighterAI");
+                    var aiModel = LoadAiModel();
                     if (aiModel == null)
                     {
-                        Debug.LogWarning("AI 모델이 없습니다 (Assets/Resources/FighterAI.onnx). RushBot으로 대신합니다.");
+                        Debug.LogWarning($"AI 모델이 없습니다 (Assets/Resources/{AiModels[aiIndex].file}.onnx). RushBot으로 대신합니다.");
                         Fighters[1].InputSource = new RushBotInput(Fighters[1], Fighters[0]);
                         break;
                     }
                     if (aiAgent == null) aiAgent = FighterAgent.Create(transform, this, Fighters[1], Fighters[0], aiModel);
-                    else { aiAgent.gameObject.SetActive(true); Fighters[1].InputSource = aiAgent; }
+                    else
+                    {
+                        aiAgent.gameObject.SetActive(true);
+                        aiAgent.SetModel("Fighter", aiModel);
+                        Fighters[1].InputSource = aiAgent;
+                    }
                     break;
                 case Opponent.Keyboard2P: Fighters[1].InputSource = new KeyboardInputSource(KeyboardInputSource.Scheme.Arrows, cam); break;
                 default: Fighters[1].InputSource = new IdleInput(); break;
             }
         }
+
+        Unity.InferenceEngine.ModelAsset LoadAiModel() =>
+            Resources.Load<Unity.InferenceEngine.ModelAsset>(AiModels[aiIndex].file);
+
+        bool UsesAi => opponent == Opponent.AI || opponent == Opponent.Watch_AI_vs_Rush;
 
         void SpawnPose(int index, out Vector3 pos, out Quaternion rot)
         {
@@ -160,6 +176,11 @@ namespace RagdollFight
         void Update()
         {
             if (Input.GetKeyDown(KeyCode.R)) StartRound();
+            if (Input.GetKeyDown(KeyCode.M))
+            {
+                aiIndex = (aiIndex + 1) % AiModels.Length;
+                if (UsesAi) { ApplyOpponent(); StartRound(); }
+            }
             if (Input.GetKeyDown(KeyCode.Tab))
             {
                 opponent = (Opponent)(((int)opponent + 1) % System.Enum.GetValues(typeof(Opponent)).Length);
@@ -195,7 +216,7 @@ namespace RagdollFight
             var style = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold };
             GUI.Label(new Rect(20, 15, 600, 40), $"P1 {score[0]} : {score[1]} P2    남은 시간 {Mathf.CeilToInt(Mathf.Max(roundTimer, 0))}", style);
             var small = new GUIStyle(GUI.skin.label) { fontSize = 14 };
-            GUI.Label(new Rect(20, 50, 1200, 25), $"P1: WASD 이동 · 마우스 = 몸 방향/팔 높이 · Space 점프 · 좌/우 클릭 = 왼손/오른손 잡기    |    상대: {opponent} (Tab) · 시점: {cam.mode} (V) · R 리셋 · Esc 커서 해제", small);
+            GUI.Label(new Rect(20, 50, 1200, 25), $"P1: WASD 이동 · 마우스 = 몸 방향/팔 높이 · Space 점프 · 좌/우 클릭 = 왼손/오른손 잡기    |    상대: {opponent} (Tab) · AI 모델: {AiModels[aiIndex].label} (M) · 시점: {cam.mode} (V) · R 리셋 · Esc 커서 해제", small);
             if (opponent == Opponent.Keyboard2P)
                 GUI.Label(new Rect(20, 72, 900, 25), "P2: 방향키 이동 · 오른쪽 Shift 점프 · , / . = 왼손/오른손 잡기", small);
             for (int i = 0; i < 2; i++)

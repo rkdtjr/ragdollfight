@@ -11,7 +11,7 @@ namespace RagdollFight
     ///   -bot Rush|Grab|Random  상대 봇 고정 (기본: 섞어서)
     ///   -shaping 0|1  유도 보상(접근·잡기·밀어내기) 끄기/켜기. 0 = 보상 A, 1 = 보상 B (기본)
     ///   -mutualFall X 동시 낙하 보상 (기본 -0.5)
-    ///   -model NAME   평가할 모델 (Resources/NAME.onnx, 기본 FighterAI)
+    ///   -model NAME   평가할 모델 (Resources/NAME.onnx, 기본 AI_B)
     ///   -opponentModel NAME  상대도 AI로 (AI vs AI 평가)
     /// </summary>
     public class TrainingManager : MonoBehaviour
@@ -24,7 +24,7 @@ namespace RagdollFight
         public static bool Shaping = true;
         public static float MutualFallReward = -0.5f;
 
-        static string modelName = "FighterAI";
+        static string modelName = "AI_B";
         static string opponentModelName;
 
         // 평가 모드 집계

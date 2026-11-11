@@ -25,6 +25,7 @@
 | 왼손 / 오른손 잡기 | 마우스 왼쪽 / 오른쪽 버튼 (누르고 있기) |
 | 점프 / 매달렸을 때 기어오르기 | Space |
 | 상대 바꾸기 | Tab |
+| AI 모델 바꾸기 (보상 B → 보상 A → mix2) | M |
 | 시점 (3인칭 / 위에서) | V |
 | 라운드 리셋 | R |
 
@@ -70,7 +71,7 @@ uv run tensorboard --logdir results
 ### 평가
 
 ```bash
-# 학습된 모델(Assets/Resources/FighterAI.onnx)로 상대 봇별 200판
+# 학습된 모델(Assets/Resources/AI_B.onnx)로 상대 봇별 200판
 RagdollTrain.exe -batchmode -nographics -eval 200 -bot Rush -timescale 20 -logFile eval.log
 # 화면으로 보기
 RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
@@ -118,7 +119,7 @@ RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
 | **rewardA** | **보상 A** + 동시 낙하 -0.5, 300만 스텝 | 러쉬 99.5% · 잡기 99.5% · 랜덤 97.5% |
 | **rewardB** | **보상 B** + 동시 낙하 -0.5, 300만 스텝 | 러쉬 100% · 잡기 100% · 랜덤 94% |
 
-게임 속 AI(`Assets/Resources/FighterAI.onnx`)는 rewardB 모델입니다.
+게임 속 AI 모델은 `Assets/Resources/`의 `AI_B.onnx`(rewardB, 기본), `AI_A.onnx`(rewardA), `AI_mix2.onnx`이고 게임 중 **M** 키로 바꿉니다.
 
 ### 보상 A vs B
 
@@ -154,7 +155,7 @@ Assets/Scripts/
   Game/      경기장, 게임 진행, 카메라, 링아웃 판정
   ML/        에이전트, 학습용 경기장
   Editor/    씬 생성, 물리 자가 테스트, 매치 시뮬레이션, 학습 빌드
-Assets/Resources/FighterAI.onnx   게임에서 쓰는 AI 모델
+Assets/Resources/AI_*.onnx        게임에서 쓰는 AI 모델 (M 키로 선택)
 ml/          학습 설정(config/), 결과(results/), 요약 스크립트
 ```
 
