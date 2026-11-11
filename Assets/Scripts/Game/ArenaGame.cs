@@ -28,13 +28,14 @@ namespace RagdollFight
         /// <summary>M 키로 고르는 AI 모델 (Assets/Resources/파일이름.onnx)</summary>
         static readonly (string file, string label)[] AiModels =
         {
-            ("AI_SP2M", "셀프플레이"),
+            ("AI_SP5M", "셀프플레이 500만"),
+            ("AI_SP2M", "셀프플레이 200만"),
             ("AI_B", "보상 B"),
             ("AI_A", "보상 A"),
             ("AI_mix2", "mix2"),
         };
         int aiIndex;      // 파랑(P2) AI 모델 — M 키
-        int p1AiIndex = 1; // AI끼리 관전할 때 빨강(P1) AI 모델 — N 키
+        int p1AiIndex = 2; // AI끼리 관전할 때 빨강(P1) AI 모델 — N 키
         FighterAgent p1Agent;
 
         public FighterController[] Fighters { get; } = new FighterController[2];
