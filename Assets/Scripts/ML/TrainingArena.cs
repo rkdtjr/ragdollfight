@@ -34,6 +34,9 @@ namespace RagdollFight
         public static float[] BotWeights = { 0.4f, 0.4f, 0.2f };
         /// <summary>평가 때 한 종류만 쓰려면 지정 (null = 섞어서)</summary>
         public static Bot? ForcedBot;
+        /// <summary>AI vs AI 평가: 상대(P2)도 이 모델로 조종한다 (null = 봇)</summary>
+        public static Unity.InferenceEngine.ModelAsset OpponentModel;
+        FighterAgent opponentAgent;
         public Bot CurrentBot { get; private set; }
         public float TimeLeft { get; private set; }
 
@@ -54,6 +57,8 @@ namespace RagdollFight
 
             ResetRound();
             Agent = FighterAgent.Create(transform, this, Fighters[0], Fighters[1], model);
+            if (OpponentModel != null)
+                opponentAgent = FighterAgent.Create(transform, this, Fighters[1], Fighters[0], OpponentModel);
             mutualFallReward = TrainingManager.MutualFallReward;
             if (!TrainingManager.Shaping)
             {
@@ -68,7 +73,7 @@ namespace RagdollFight
         public void ResetRound()
         {
             CurrentBot = ForcedBot ?? PickBot();
-            Fighters[1].InputSource = CurrentBot switch
+            if (OpponentModel == null) Fighters[1].InputSource = CurrentBot switch
             {
                 Bot.Grab => new GrabBotInput(Fighters[1], Fighters[0], this),
                 Bot.Random => new RandomBotInput(Fighters[1]),
@@ -145,6 +150,7 @@ namespace RagdollFight
             TrainingManager.ReportResult(result, ringOutWin, mutual, roundTime - TimeLeft);
 
             Agent.EndEpisode();
+            if (opponentAgent != null) opponentAgent.EndEpisode();
             ResetRound();
         }
     }

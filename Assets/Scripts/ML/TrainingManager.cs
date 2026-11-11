@@ -11,6 +11,8 @@ namespace RagdollFight
     ///   -bot Rush|Grab|Random  상대 봇 고정 (기본: 섞어서)
     ///   -shaping 0|1  유도 보상(접근·잡기·밀어내기) 끄기/켜기. 0 = 보상 A, 1 = 보상 B (기본)
     ///   -mutualFall X 동시 낙하 보상 (기본 -0.5)
+    ///   -model NAME   평가할 모델 (Resources/NAME.onnx, 기본 FighterAI)
+    ///   -opponentModel NAME  상대도 AI로 (AI vs AI 평가)
     /// </summary>
     public class TrainingManager : MonoBehaviour
     {
@@ -21,6 +23,9 @@ namespace RagdollFight
         // 보상 설정 (실행 인자로 바꿀 수 있다)
         public static bool Shaping = true;
         public static float MutualFallReward = -0.5f;
+
+        static string modelName = "FighterAI";
+        static string opponentModelName;
 
         // 평가 모드 집계
         static int evalGames, played, wins, losses, ringOutWins, mutualFalls;
@@ -55,6 +60,8 @@ namespace RagdollFight
                 if (args[i] == "-timescale" && float.TryParse(args[i + 1], out float ts)) Time.timeScale = ts;
                 if (args[i] == "-shaping") Shaping = args[i + 1] != "0";
                 if (args[i] == "-mutualFall" && float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float mf)) MutualFallReward = mf;
+                if (args[i] == "-model") modelName = args[i + 1];
+                if (args[i] == "-opponentModel") opponentModelName = args[i + 1];
                 if (args[i] == "-bot" && System.Enum.TryParse(args[i + 1], true, out TrainingArena.Bot b)) TrainingArena.ForcedBot = b;
             }
 
@@ -62,9 +69,17 @@ namespace RagdollFight
             Unity.InferenceEngine.ModelAsset model = null;
             if (evalGames > 0)
             {
-                model = Resources.Load<Unity.InferenceEngine.ModelAsset>("FighterAI");
-                Debug.Log($"[Eval] {evalGames} games vs {(TrainingArena.ForcedBot?.ToString() ?? "mix")}, model={(model != null ? model.name : "MISSING")}");
-                if (model == null) { Application.Quit(1); return; }
+                model = Resources.Load<Unity.InferenceEngine.ModelAsset>(modelName);
+                if (opponentModelName != null)
+                    TrainingArena.OpponentModel = Resources.Load<Unity.InferenceEngine.ModelAsset>(opponentModelName);
+                string vs = opponentModelName != null ? $"AI {opponentModelName}" : (TrainingArena.ForcedBot?.ToString() ?? "mix");
+                Debug.Log($"[Eval] {evalGames} games, {modelName} vs {vs}");
+                if (model == null || (opponentModelName != null && TrainingArena.OpponentModel == null))
+                {
+                    Debug.LogError("[Eval] model not found in Resources");
+                    Application.Quit(1);
+                    return;
+                }
             }
 
             int cols = Mathf.CeilToInt(Mathf.Sqrt(arenaCount));
