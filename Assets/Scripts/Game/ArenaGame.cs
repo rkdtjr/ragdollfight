@@ -8,7 +8,7 @@ namespace RagdollFight
     /// </summary>
     public class ArenaGame : MonoBehaviour, IFightContext
     {
-        public enum Opponent { RushBot, GrabBot, RandomBot, AI, Keyboard2P, Idle, Watch_AI_vs_Rush }
+        public enum Opponent { RushBot, GrabBot, RandomBot, AI, Keyboard2P, Idle, Watch_AI_vs_Rush, Watch_AI_vs_AI }
 
         [Header("Match")]
         public Opponent opponent = Opponent.RushBot;
@@ -28,11 +28,14 @@ namespace RagdollFight
         /// <summary>M 키로 고르는 AI 모델 (Assets/Resources/파일이름.onnx)</summary>
         static readonly (string file, string label)[] AiModels =
         {
+            ("AI_SP2M", "셀프플레이"),
             ("AI_B", "보상 B"),
             ("AI_A", "보상 A"),
             ("AI_mix2", "mix2"),
         };
-        int aiIndex;
+        int aiIndex;      // 파랑(P2) AI 모델 — M 키
+        int p1AiIndex = 1; // AI끼리 관전할 때 빨강(P1) AI 모델 — N 키
+        FighterAgent p1Agent;
 
         public FighterController[] Fighters { get; } = new FighterController[2];
 
@@ -79,6 +82,23 @@ namespace RagdollFight
         {
             Fighters[0].InputSource = new KeyboardInputSource(KeyboardInputSource.Scheme.WasdMouse, cam);
             if (aiAgent != null) aiAgent.gameObject.SetActive(false);
+            if (p1Agent != null) p1Agent.gameObject.SetActive(false);
+            if (opponent == Opponent.Watch_AI_vs_AI)
+            {
+                // 관전: 빨강 AI vs 파랑 AI
+                var m1 = Resources.Load<Unity.InferenceEngine.ModelAsset>(AiModels[p1AiIndex].file);
+                if (m1 != null)
+                {
+                    if (p1Agent == null) p1Agent = FighterAgent.Create(transform, this, Fighters[0], Fighters[1], m1);
+                    else
+                    {
+                        p1Agent.gameObject.SetActive(true);
+                        p1Agent.SetModel("Fighter", m1);
+                        Fighters[0].InputSource = p1Agent;
+                    }
+                }
+                cam.mode = FightCamera.Mode.Overview;
+            }
             if (opponent == Opponent.Watch_AI_vs_Rush)
             {
                 // 관전: P1(빨강) = 러쉬봇, P2(파랑) = AI
@@ -92,6 +112,7 @@ namespace RagdollFight
                 case Opponent.RandomBot: Fighters[1].InputSource = new RandomBotInput(Fighters[1]); break;
                 case Opponent.AI:
                 case Opponent.Watch_AI_vs_Rush:
+                case Opponent.Watch_AI_vs_AI:
                     var aiModel = LoadAiModel();
                     if (aiModel == null)
                     {
@@ -115,7 +136,7 @@ namespace RagdollFight
         Unity.InferenceEngine.ModelAsset LoadAiModel() =>
             Resources.Load<Unity.InferenceEngine.ModelAsset>(AiModels[aiIndex].file);
 
-        bool UsesAi => opponent == Opponent.AI || opponent == Opponent.Watch_AI_vs_Rush;
+        bool UsesAi => opponent == Opponent.AI || opponent == Opponent.Watch_AI_vs_Rush || opponent == Opponent.Watch_AI_vs_AI;
 
         void SpawnPose(int index, out Vector3 pos, out Quaternion rot)
         {
@@ -171,6 +192,7 @@ namespace RagdollFight
             message = "";
             judge.Reset();
             if (aiAgent != null && aiAgent.isActiveAndEnabled) aiAgent.EndEpisode();
+            if (p1Agent != null && p1Agent.isActiveAndEnabled) p1Agent.EndEpisode();
         }
 
         void Update()
@@ -180,6 +202,11 @@ namespace RagdollFight
             {
                 aiIndex = (aiIndex + 1) % AiModels.Length;
                 if (UsesAi) { ApplyOpponent(); StartRound(); }
+            }
+            if (Input.GetKeyDown(KeyCode.N))
+            {
+                p1AiIndex = (p1AiIndex + 1) % AiModels.Length;
+                if (opponent == Opponent.Watch_AI_vs_AI) { ApplyOpponent(); StartRound(); }
             }
             if (Input.GetKeyDown(KeyCode.Tab))
             {
@@ -217,6 +244,8 @@ namespace RagdollFight
             GUI.Label(new Rect(20, 15, 600, 40), $"P1 {score[0]} : {score[1]} P2    남은 시간 {Mathf.CeilToInt(Mathf.Max(roundTimer, 0))}", style);
             var small = new GUIStyle(GUI.skin.label) { fontSize = 14 };
             GUI.Label(new Rect(20, 50, 1200, 25), $"P1: WASD 이동 · 마우스 = 몸 방향/팔 높이 · Space 점프 · 좌/우 클릭 = 왼손/오른손 잡기    |    상대: {opponent} (Tab) · AI 모델: {AiModels[aiIndex].label} (M) · 시점: {cam.mode} (V) · R 리셋 · Esc 커서 해제", small);
+            if (opponent == Opponent.Watch_AI_vs_AI)
+                GUI.Label(new Rect(20, 72, 900, 25), $"AI 대전 관전: 빨강 = {AiModels[p1AiIndex].label} (N)   vs   파랑 = {AiModels[aiIndex].label} (M)", small);
             if (opponent == Opponent.Keyboard2P)
                 GUI.Label(new Rect(20, 72, 900, 25), "P2: 방향키 이동 · 오른쪽 Shift 점프 · , / . = 왼손/오른손 잡기", small);
             for (int i = 0; i < 2; i++)
