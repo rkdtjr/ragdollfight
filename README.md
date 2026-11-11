@@ -1,0 +1,132 @@
+# 래그돌 격투 (Ragdoll Fight)
+
+금오공과대학교 강화학습 (GA3032/AK0028) 1조 프로젝트.
+
+흐물거리는 액티브 래그돌 캐릭터 둘이 원형 경기장에서 붙잡고 밀어서 **상대를 링 밖으로 떨어뜨리면 이기는** 1:1 격투 게임입니다.
+사람·봇·AI가 모두 같은 조작(이동, 양손 잡기, 점프, 몸 방향, 팔 높이)을 쓰고, AI는 Unity ML-Agents + PPO로 학습합니다.
+
+## 준비물
+
+| 항목 | 버전 |
+|---|---|
+| Unity | **6000.6.8f1** (ML-Agents 패키지 4.2.0은 처음 열 때 자동 설치) |
+| Python 환경 | [uv](https://docs.astral.sh/uv/) — Python 3.10.12, mlagents 1.1.0, PyTorch 2.2.2 (CUDA 12.1) |
+
+## 게임 해보기
+
+1. Unity Hub에서 이 폴더를 열고 `Assets/Scenes/Arena.unity`를 연 뒤 Play.
+   씬이 없으면 메뉴 **RagdollFight → Create Arena Scene**.
+2. 게임 화면을 클릭하면 마우스 시점이 켜집니다.
+
+| 조작 | P1 (빨강) |
+|---|---|
+| 이동 | WASD |
+| 몸 방향 / 팔 높이 | 마우스 좌우 / 상하 |
+| 왼손 / 오른손 잡기 | 마우스 왼쪽 / 오른쪽 버튼 (누르고 있기) |
+| 점프 / 매달렸을 때 기어오르기 | Space |
+| 상대 바꾸기 | Tab |
+| 시점 (3인칭 / 위에서) | V |
+| 라운드 리셋 | R |
+
+**Tab으로 고르는 상대 (파랑, P2):** RushBot → GrabBot → RandomBot → **AI** (학습된 모델) → Keyboard2P (방향키, `,` `.` 잡기, 오른쪽 Shift 점프) → Idle → **Watch_AI_vs_Rush** (관전: 빨강 러쉬봇 vs 파랑 AI)
+
+**주요 동작**
+- 상대를 잡고 마우스를 위로 → **들어올리기** (들린 상대는 버티지 못함, 대신 악력이 빨리 닳음)
+- 바닥을 보며 클릭 → 숙여서 **바닥 잡기**
+- 떨어질 때 클릭 유지 → **가장자리 매달리기**, Space로 기어오르기
+- **악력 게이지**: 잡고 있으면 줄고, 다 닳으면 손이 풀림
+
+## 경기 규칙
+
+- 엉덩이가 경기장 아래로 떨어지면 **링아웃 패배**.
+- 한 명이 떨어져도 1초 더 보고, 그 사이 둘 다 떨어지면 **동시 낙하 = 무승부**.
+- 라운드 30초 (게임은 60초). 마지막 구간에는 **경기장이 줄어듦** (서든데스).
+- 시간이 끝나면 **무승부** (판정승 없음).
+
+## AI 학습
+
+ML-Agents의 통신 DLL이 **한글 경로에서 열리지 않아서**, 학습용 실행 파일은 영문 경로(`%LOCALAPPDATA%\ragdollfight\env`)에 빌드합니다.
+
+```bash
+# 1) Unity 메뉴: RagdollFight → Build Training Env
+#    → C:\Users\<사용자>\AppData\Local\ragdollfight\env\RagdollTrain.exe 생성
+#    (config/*.yaml 의 env_path 를 자기 경로에 맞게 수정)
+
+# 2) 파이썬 환경 (처음 한 번)
+cd ml
+uv sync
+
+# 3) 학습 (PowerShell이면 $env:PYTHONUTF8=1)
+export PYTHONUTF8=1
+uv run mlagents-learn config/reward_B_mf.yaml --run-id=myrun
+
+# 4) 학습 곡선 표
+uv run python summary.py myrun
+uv run tensorboard --logdir results
+```
+
+학습 환경은 경기장 8개 × 프로세스 4개를 동시에 돌립니다 (RTX 3060 Ti + 12코어 기준 초당 약 800스텝, 100만 스텝 ≈ 20분).
+
+### 평가
+
+```bash
+# 학습된 모델(Assets/Resources/FighterAI.onnx)로 상대 봇별 200판
+RagdollTrain.exe -batchmode -nographics -eval 200 -bot Rush -timescale 20 -logFile eval.log
+# 화면으로 보기
+RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
+```
+
+| 실행 인자 | 의미 |
+|---|---|
+| `-arenas N` | 경기장 개수 |
+| `-eval N` | 학습 대신 N판 평가 후 결과를 로그에 남기고 종료 |
+| `-bot Rush\|Grab\|Random` | 상대 봇 고정 (기본: Rush 40% · Grab 40% · Random 20%) |
+| `-shaping 0\|1` | 보상 A (0) / 보상 B (1) |
+| `-mutualFall X` | 동시 낙하 보상 (기본 -0.5) |
+
+## 강화학습 설계
+
+**관측 (40차원)**: 나·상대의 위치/속도/몸 기울기, 가장자리까지 거리, 잡기 상태, 악력, 기절·들림·매달림 여부, 경기장 크기, 남은 시간.
+모두 "상대를 바라보는 방향" 기준 좌표계라서 어느 쪽에서 시작해도 같은 정책을 씁니다.
+
+**행동 (MultiDiscrete)**: 이동 9방향 · 왼손 2 · 오른손 2 · 점프 2 · 몸 방향 2 (이동 방향/상대 쪽) · 팔 높이 3 (아래/수평/위). 0.05초마다 판단.
+
+**보상**
+
+| | 보상 A | 보상 B |
+|---|---|---|
+| 링아웃 승 / 패 | +1 / -1 | +1 / -1 |
+| 동시 낙하 | -0.5 | -0.5 |
+| 시간 종료 | 0 | 0 |
+| 시간 벌점 | 초당 -0.01 | 초당 -0.01 |
+| 접근 (거리 1 m 줄 때마다) | | +0.01 |
+| 첫 잡기 (한 판 1회) | | +0.05 |
+| 잡은 채 상대를 가장자리로 1 m | | +0.02 |
+| 안전 영역 복귀 (한 판 1회) | | +0.05 |
+
+## 결과
+
+`ml/results/<run>/` 에 최종 모델(`Fighter.onnx`), 학습 설정, TensorBoard 기록이 있습니다.
+
+| run | 내용 | 평가 (봇별 200판, 승률) |
+|---|---|---|
+| pilot2 | 러쉬봇만, 이전 판정(먼저 떨어진 쪽 패) | 러쉬 74% — 대부분 같이 떨어진 경기 |
+| pilot3 | + 동시 낙하 -0.5, 판정승 있음 | 러쉬 17% · 잡기 22% · 랜덤 100% (새 규칙 기준) |
+| mix2 | 봇 3종 섞기, 판정승 없음, 물리 강화 (안전 영역 복귀 보상 없는 B) | **러쉬 99% · 잡기 100% · 랜덤 95.5%** |
+| rewardA / rewardB | 보상 A vs B 비교 (300만 스텝) | 진행 중 |
+
+pilot1, mix1은 중간에 멈춘 실험입니다 (보상 버그 / 물리 변경 전).
+
+## 폴더 구조
+
+```
+Assets/Scripts/
+  Fighter/   래그돌·컨트롤러·잡기·입력(키보드, 봇)
+  Game/      경기장, 게임 진행, 카메라, 링아웃 판정
+  ML/        에이전트, 학습용 경기장
+  Editor/    씬 생성, 물리 자가 테스트, 매치 시뮬레이션, 학습 빌드
+Assets/Resources/FighterAI.onnx   게임에서 쓰는 AI 모델
+ml/          학습 설정(config/), 결과(results/), 요약 스크립트
+```
+
+**물리 자가 테스트**: 메뉴 **RagdollFight → Run Physics Self-Test** (서기, 걷기, 잡기, 들어올리기, 매달리기 등 20개 항목).

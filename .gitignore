@@ -1,0 +1,51 @@
+# ── Unity가 다시 만드는 폴더 ──
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# IDE / 자동 생성 파일
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.slnx
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+sysinfo.txt
+crashlytics-build.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ── Python (ml/) ──
+ml/.venv/
+__pycache__/
+*.pyc
+
+# 학습 결과: 최종 모델(Fighter.onnx)·설정·TensorBoard 기록만 올리고 체크포인트는 뺀다
+ml/results/**/*.pt
+ml/results/**/Fighter-*.onnx
+ml/results/*/run_logs/
+
+# ML-Agents가 에디터 실행 때 만드는 타이머 기록
+/Assets/ML-Agents/
+/Assets/ML-Agents.meta
