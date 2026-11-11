@@ -34,7 +34,9 @@ namespace RagdollFight
         public float turnSpeed = 8f;
         public float strideLength = 1.0f;
         public float jumpSpeed = 4f;
-        public float jumpCooldown = 0.8f;
+        public float jumpCooldown = 1.2f;
+        [Tooltip("점프 한 번에 줄어드는 악력 (마구 뛰는 것 방지)")]
+        public float jumpStaminaCost = 0.15f;
 
         [Header("Arms")]
         [Tooltip("armPitch = 0일 때 팔 각도 (90 = 수평)")]
@@ -270,10 +272,11 @@ namespace RagdollFight
             jumpTimer -= dt;
             if (input.jump && jumpTimer <= 0f && c > 0.8f && !IsLifted)
             {
-                if (IsGrounded)
+                if (IsGrounded && Stamina >= jumpStaminaCost)
                 {
                     foreach (var rb in Body.bodies) rb.AddForce(Vector3.up * jumpSpeed, ForceMode.VelocityChange);
                     jumpTimer = jumpCooldown;
+                    Stamina -= jumpStaminaCost;
                 }
                 else if (IsHanging && Stamina > 0.05f)
                 {

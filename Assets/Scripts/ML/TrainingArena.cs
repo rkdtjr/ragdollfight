@@ -37,6 +37,8 @@ namespace RagdollFight
         /// <summary>AI vs AI 평가: 상대(P2)도 이 모델로 조종한다 (null = 봇)</summary>
         public static Unity.InferenceEngine.ModelAsset OpponentModel;
         FighterAgent opponentAgent;
+        /// <summary>셀프 플레이 경기장: 상대(P2)도 학습 중인 같은 정책(다른 팀)이 조종한다</summary>
+        [HideInInspector] public bool selfPlay;
         public Bot CurrentBot { get; private set; }
         public float TimeLeft { get; private set; }
 
@@ -59,21 +61,27 @@ namespace RagdollFight
             Agent = FighterAgent.Create(transform, this, Fighters[0], Fighters[1], model);
             if (OpponentModel != null)
                 opponentAgent = FighterAgent.Create(transform, this, Fighters[1], Fighters[0], OpponentModel);
+            else if (selfPlay)
+                opponentAgent = FighterAgent.Create(transform, this, Fighters[1], Fighters[0], null, teamId: 1);
             mutualFallReward = TrainingManager.MutualFallReward;
             if (!TrainingManager.Shaping)
             {
                 // 보상 A: 승패 + 시간 벌점만
-                Agent.approachReward = 0f;
-                Agent.grabReward = 0f;
-                Agent.pushOutReward = 0f;
-                Agent.safeReturnReward = 0f;
+                foreach (var ag in new[] { Agent, opponentAgent })
+                {
+                    if (ag == null) continue;
+                    ag.approachReward = 0f;
+                    ag.grabReward = 0f;
+                    ag.pushOutReward = 0f;
+                    ag.safeReturnReward = 0f;
+                }
             }
         }
 
         public void ResetRound()
         {
             CurrentBot = ForcedBot ?? PickBot();
-            if (OpponentModel == null) Fighters[1].InputSource = CurrentBot switch
+            if (OpponentModel == null && !selfPlay) Fighters[1].InputSource = CurrentBot switch
             {
                 Bot.Grab => new GrabBotInput(Fighters[1], Fighters[0], this),
                 Bot.Random => new RandomBotInput(Fighters[1]),
@@ -139,6 +147,19 @@ namespace RagdollFight
 
             Agent.AddReward(reward);
             var stats = Academy.Instance.StatsRecorder;
+            if (selfPlay)
+            {
+                // 상대도 같은 규칙으로 보상 (제로섬, 동시 낙하는 둘 다 벌점)
+                opponentAgent.AddReward(mutual ? mutualFallReward : -result * winReward);
+                stats.Add("SelfPlay/Decisive", result != 0 ? 1f : 0f);
+                stats.Add("SelfPlay/MutualFall", mutual ? 1f : 0f);
+                stats.Add("SelfPlay/Timeout", result == 0 && !mutual ? 1f : 0f);
+                stats.Add("SelfPlay/Length", roundTime - TimeLeft);
+                Agent.EndEpisode();
+                opponentAgent.EndEpisode();
+                ResetRound();
+                return;
+            }
             stats.Add("Match/Win", result > 0 ? 1f : 0f);
             stats.Add($"Match/Win_vs_{CurrentBot}", result > 0 ? 1f : 0f);
             stats.Add($"Match/MutualFall_vs_{CurrentBot}", mutual ? 1f : 0f);

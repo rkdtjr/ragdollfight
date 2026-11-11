@@ -13,6 +13,7 @@ namespace RagdollFight
     ///   -mutualFall X 동시 낙하 보상 (기본 -0.5)
     ///   -model NAME   평가할 모델 (Resources/NAME.onnx, 기본 AI_B)
     ///   -opponentModel NAME  상대도 AI로 (AI vs AI 평가)
+    ///   -selfplay R   경기장 중 비율 R을 셀프 플레이(AI vs AI 학습)로, 나머지는 봇 상대 (기본 0)
     /// </summary>
     public class TrainingManager : MonoBehaviour
     {
@@ -23,6 +24,7 @@ namespace RagdollFight
         // 보상 설정 (실행 인자로 바꿀 수 있다)
         public static bool Shaping = true;
         public static float MutualFallReward = -0.5f;
+        public static float SelfPlayRatio = 0f;
 
         static string modelName = "AI_B";
         static string opponentModelName;
@@ -61,11 +63,13 @@ namespace RagdollFight
                 if (args[i] == "-shaping") Shaping = args[i + 1] != "0";
                 if (args[i] == "-mutualFall" && float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float mf)) MutualFallReward = mf;
                 if (args[i] == "-model") modelName = args[i + 1];
+                if (args[i] == "-selfplay" && float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sp)) SelfPlayRatio = sp;
                 if (args[i] == "-opponentModel") opponentModelName = args[i + 1];
                 if (args[i] == "-bot" && System.Enum.TryParse(args[i + 1], true, out TrainingArena.Bot b)) TrainingArena.ForcedBot = b;
             }
 
-            Debug.Log($"[Reward] shaping={(Shaping ? "B" : "A")} mutualFall={MutualFallReward}");
+            Debug.Log($"[Reward] shaping={(Shaping ? "B" : "A")} mutualFall={MutualFallReward} selfplay={SelfPlayRatio}");
+            int selfPlayArenas = evalGames > 0 ? 0 : Mathf.RoundToInt(arenaCount * SelfPlayRatio);
             Unity.InferenceEngine.ModelAsset model = null;
             if (evalGames > 0)
             {
@@ -88,7 +92,9 @@ namespace RagdollFight
                 var go = new GameObject($"TrainingArena{k}");
                 go.transform.SetParent(transform, false);
                 go.transform.position = new Vector3((k % cols) * spacing, 0f, (k / cols) * spacing);
-                go.AddComponent<TrainingArena>().Build(model);
+                var ta = go.AddComponent<TrainingArena>();
+                ta.selfPlay = k < selfPlayArenas;
+                ta.Build(model);
             }
 
             // 화면이 있을 때: 모든 경기장이 보이도록 카메라를 맞춘다

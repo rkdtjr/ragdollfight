@@ -53,7 +53,7 @@ namespace RagdollFight
         /// model이 null이면 학습용(파이썬 트레이너가 조종), 있으면 그 모델로 추론만 한다.
         /// </summary>
         public static FighterAgent Create(Transform parent, IFightContext env, FighterController self, FighterController opponent,
-                                          Unity.InferenceEngine.ModelAsset model)
+                                          Unity.InferenceEngine.ModelAsset model, int teamId = 0)
         {
             // BehaviorParameters를 먼저 설정한 뒤 켜야 한다.
             var go = new GameObject($"Agent ({self.name})");
@@ -63,6 +63,7 @@ namespace RagdollFight
             bp.BehaviorName = "Fighter";
             bp.BrainParameters.VectorObservationSize = ObservationSize;
             bp.BrainParameters.ActionSpec = ActionSpec.MakeDiscrete(ActionBranches);
+            bp.TeamId = teamId; // 셀프 플레이: 0과 1이 서로 다른 팀
             if (model != null)
             {
                 bp.Model = model;

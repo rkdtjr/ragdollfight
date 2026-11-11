@@ -98,6 +98,62 @@ namespace RagdollFight
 
             TotalMass = 0f;
             foreach (var rb in bodies) TotalMass += rb.mass;
+
+            AddVisuals(visual);
+        }
+
+        // ── 보이는 모양만 다듬기 (충돌·질량 없음 → 물리와 학습에는 영향 없음) ──
+        static Material eyeMat;
+
+        void AddVisuals(Material bodyVisual)
+        {
+            // 고무·점토 같은 살짝 반들거리는 재질
+            if (bodyVisual.HasProperty("_Glossiness")) bodyVisual.SetFloat("_Glossiness", 0.35f);
+            if (bodyVisual.HasProperty("_Smoothness")) bodyVisual.SetFloat("_Smoothness", 0.35f);
+            if (eyeMat == null)
+            {
+                eyeMat = new Material(bodyVisual) { name = "Eye_Mat" };
+                if (eyeMat.HasProperty("_BaseColor")) eyeMat.SetColor("_BaseColor", new Color(0.08f, 0.08f, 0.1f));
+                if (eyeMat.HasProperty("_Color")) eyeMat.SetColor("_Color", new Color(0.08f, 0.08f, 0.1f));
+                if (eyeMat.HasProperty("_Glossiness")) eyeMat.SetFloat("_Glossiness", 0.8f);
+            }
+
+            // 관절 틈을 메우는 둥근 덩어리. 아래쪽(자식) 부위에 붙여서 같이 움직인다.
+            Blob(Part.Chest, new Vector3(0f, 0.95f, 0f), new Vector3(0.50f, 0.42f, 0.48f), bodyVisual);      // 허리
+            Blob(Part.Head, new Vector3(0f, 1.56f, 0f), Vector3.one * 0.20f, bodyVisual);       // 목
+            for (int side = 0; side < 2; side++)
+            {
+                float s = side == 0 ? -1f : 1f;
+                Part upperArm = side == 0 ? Part.UpperArmL : Part.UpperArmR;
+                Part lowerArm = side == 0 ? Part.LowerArmL : Part.LowerArmR;
+                Part upperLeg = side == 0 ? Part.UpperLegL : Part.UpperLegR;
+                Part lowerLeg = side == 0 ? Part.LowerLegL : Part.LowerLegR;
+                Blob(upperArm, new Vector3(0.36f * s, 1.42f, 0f), Vector3.one * 0.185f, bodyVisual);   // 어깨
+                Blob(lowerArm, new Vector3(0.37f * s, 1.07f, 0f), Vector3.one * 0.18f, bodyVisual);   // 팔꿈치
+                Blob(lowerArm, new Vector3(0.37f * s, 0.70f, 0f), Vector3.one * 0.23f, bodyVisual);   // 손 (잡는 지점)
+                Blob(upperLeg, new Vector3(0.14f * s, 0.73f, 0f), Vector3.one * 0.215f, bodyVisual);   // 골반
+                Blob(lowerLeg, new Vector3(0.14f * s, 0.37f, 0f), Vector3.one * 0.20f, bodyVisual);   // 무릎
+                Blob(lowerLeg, new Vector3(0.14f * s, 0.04f, 0.05f), new Vector3(0.21f, 0.12f, 0.30f), bodyVisual); // 발
+                Blob(Part.Head, new Vector3(0.075f * s, 1.79f, 0.185f), new Vector3(0.06f, 0.075f, 0.04f), eyeMat); // 눈
+            }
+        }
+
+        /// <summary>
+        /// 부위에 보이기만 하는 구를 붙인다. rootLocalPos·size는 루트 기준 (부위의 늘어난 스케일을 상쇄한다).
+        /// </summary>
+        void Blob(Part part, Vector3 rootLocalPos, Vector3 size, Material mat)
+        {
+            var parent = bodies[(int)part].transform;
+            Vector3 sc = parent.localScale;
+            Vector3 inv = new Vector3(1f / sc.x, 1f / sc.y, 1f / sc.z);
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = "Visual";
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = Vector3.Scale(rootLocalPos - restLocalPos[(int)part], inv);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.Scale(size, inv);
+            go.GetComponent<Renderer>().sharedMaterial = mat;
         }
 
         Rigidbody MakeBody(Part part, GameObject go, Vector3 localPos, float mass, Collider col, PhysicsMaterial mat, Color color, ref Material visual)

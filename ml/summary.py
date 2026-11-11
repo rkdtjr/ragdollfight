@@ -17,6 +17,10 @@ TAGS = [
     ("Match/Win_vs_Grab", "승_잡기"),
     ("Match/Win_vs_Random", "승_랜덤"),
     ("Match/Length", "경기시간(s)"),
+    ("Self-play/ELO", "ELO"),
+    ("SelfPlay/Decisive", "AI전_승부"),
+    ("SelfPlay/MutualFall", "AI전_동시낙하"),
+    ("SelfPlay/Timeout", "AI전_시간종료"),
 ]
 
 

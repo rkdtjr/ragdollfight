@@ -1,0 +1,43 @@
+# 셀프 플레이: 보상 B + 동시 낙하 -0.5, 경기장 절반은 AI vs AI, 절반은 봇. rewardB 모델에서 이어서 학습
+behaviors:
+  Fighter:
+    trainer_type: ppo
+    hyperparameters:
+      batch_size: 1024
+      buffer_size: 20480
+      learning_rate: 3.0e-4
+      beta: 5.0e-3
+      epsilon: 0.2
+      lambd: 0.95
+      num_epoch: 3
+      learning_rate_schedule: linear
+    network_settings:
+      normalize: true
+      hidden_units: 256
+      num_layers: 2
+    self_play:
+      save_steps: 50000          # 이 간격마다 현재 모델을 상대 후보로 저장
+      team_change: 200000        # 학습하는 팀을 바꾸는 간격
+      swap_steps: 25000          # 상대 모델을 바꾸는 간격
+      window: 10                 # 최근 저장본 10개 중에서 상대를 고른다
+      play_against_latest_model_ratio: 0.5
+      initial_elo: 1200.0
+    reward_signals:
+      extrinsic:
+        gamma: 0.995
+        strength: 1.0
+    max_steps: 5000000
+    time_horizon: 256
+    summary_freq: 20000
+    checkpoint_interval: 500000
+    keep_checkpoints: 5
+
+env_settings:
+  env_path: C:/Users/m0105/AppData/Local/ragdollfight/env/RagdollTrain  # gRPC DLL이 한글 경로에서 안 열려서 영문 경로에 둔다
+  num_envs: 4
+  env_args: ["-arenas", "8", "-shaping", "1", "-mutualFall", "-0.5", "-selfplay", "0.5"]
+
+engine_settings:
+  no_graphics: true
+  time_scale: 20
+  target_frame_rate: -1
