@@ -84,7 +84,7 @@ RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
 | `-bot Rush\|Grab\|Random` | 상대 봇 고정 (기본: Rush 40% · Grab 40% · Random 20%) |
 | `-shaping 0\|1` | 보상 A (0) / 보상 B (1) |
 | `-mutualFall X` | 동시 낙하 보상 (기본 -0.5) |
-| `-model NAME` | 평가할 모델 (`Resources/NAME.onnx`, 기본 FighterAI) |
+| `-model NAME` | 평가할 모델 (`Resources/NAME.onnx`, 기본 AI_B) |
 | `-opponentModel NAME` | 상대도 AI로 (AI vs AI 평가). 모델은 `Assets/Resources/`에 넣고 빌드 |
 
 ## 강화학습 설계
