@@ -78,6 +78,8 @@ namespace RagdollFight
         public int thinkEverySteps = 20;
         /// <summary>엉덩이가 이 높이 아래로 내려가면(경기장 밖으로 떨어지는 중) 손을 놓는다. 사람처럼.</summary>
         public float releaseBelowY = -0.2f;
+        /// <summary>false면 잡지 않고 몸으로만 밀어붙이는 러쉬봇 (학습 인자 -rushGrab 0)</summary>
+        public static bool GrabEnabled = true;
 
         FighterInput decision;
         int stepsUntilThink;
@@ -103,7 +105,7 @@ namespace RagdollFight
             d.y = 0f;
             i.move = FighterInput.MoveFromIndex(FighterInput.IndexFromMove(new Vector2(d.x, d.z))) * speedScale;
             i.aim = new Vector2(d.x, d.z);
-            bool close = d.magnitude < grabDistance;
+            bool close = GrabEnabled && d.magnitude < grabDistance;
             i.grabLeft = close;
             i.grabRight = close;
             decision = i;

@@ -95,6 +95,7 @@ RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
 | `-eval N` | 학습 대신 N판 평가 후 결과를 로그에 남기고 종료 |
 | `-bot Rush\|Grab\|Random\|Fsm` | 상대 봇 고정 (기본: Rush 40% · Grab 40% · Random 20%). Fsm은 평가 전용 |
 | `-rules physics\|stamina` | 게임 규칙 (기본 stamina = 악력 게이지) |
+| `-rushGrab 0` | 러쉬 봇이 잡지 않고 몸으로만 밀어붙임 |
 | `-shaping 0\|1` | 보상 A (0) / 보상 B (1) |
 | `-mutualFall X` | 동시 낙하 보상 (기본 -0.5) |
 | `-model NAME` | 평가할 모델 (`Resources/NAME.onnx`, 기본 AI_B) |
@@ -132,7 +133,7 @@ RagdollTrain.exe -arenas 4 -eval 1000 -timescale 1
 | **rewardA** | **보상 A** + 동시 낙하 -0.5, 300만 스텝 | 러쉬 99.5% · 잡기 99.5% · 랜덤 97.5% |
 | **rewardB** | **보상 B** + 동시 낙하 -0.5, 300만 스텝 | 러쉬 100% · 잡기 100% · 랜덤 94% |
 
-게임 속 AI 모델은 `Assets/Resources/`의 `AI_PhysB.onnx`(물리만 규칙, 설정 창 기본), `AI_SP5M.onnx`(셀프 플레이 500만 스텝), `AI_SP2M.onnx`(200만 스텝), `AI_B.onnx`(rewardB), `AI_A.onnx`(rewardA), `AI_mix2.onnx`이고 게임 중 설정 창(Esc)에서 바꿉니다.
+게임 속 AI 모델은 `Assets/Resources/`의 `AI_PhysSP.onnx`(물리만 셀프 플레이, 설정 창 기본), `AI_PhysB.onnx`, `AI_PhysNG.onnx`(물리만 규칙), `AI_SP5M.onnx`(셀프 플레이 500만 스텝), `AI_SP2M.onnx`(200만 스텝), `AI_B.onnx`(rewardB), `AI_A.onnx`(rewardA), `AI_mix2.onnx`이고 게임 중 설정 창(Esc)에서 바꿉니다.
 
 ### 보상 A vs B
 
@@ -204,6 +205,32 @@ FSM 봇(`Assets/Scripts/Fighter/FsmBot.cs`)은 접근 · 견제(옆으로 돌기
 → 악력이 없으면 **러쉬 봇처럼 잡고 계속 미는 상대와 끝없이 버티기**가 된다. 러쉬 봇 상대 경기의 70% 이상이 무승부(시간 종료나 동시 낙하)이고 평균 경기 시간이 25초(제한 30초)다.
 물리만 규칙으로 학습해도 이 문제를 풀지 못했고, 오히려 악력 규칙으로 학습한 B가 물리만 규칙에서도 비슷하거나 더 잘했다.
 악력 게이지는 "잡고 버티기"를 끝내는 장치로서 실제로 효과가 있었다 (악력 규칙에서는 러쉬 봇 상대 B 100%, 평균 4.7초).
+
+**물리만 규칙에서 버티기를 풀어보려는 시도 두 가지** (각 300만 스텝, 평가는 물리만 규칙 200판)
+
+- **physicsNG**: 러쉬 봇이 잡지 않고 몸으로만 밀게 해서 처음부터 학습 (`-rushGrab 0`)
+- **physicsSP**: physicsB에서 이어서 셀프 플레이 (경기장 절반 AI vs AI). ELO 1200 → 1051
+
+| 상대 | physicsB | physicsNG | physicsSP |
+|---|---|---|---|
+| 러쉬 봇 (잡음) | 27.5% | 9.0% | 17.5% |
+| 러쉬 봇 (잡지 않음) | 12.5% (무 175) | **88.0%** | 4.0% (무 189) |
+| 잡기 봇 | 97.5% | 99.5% | 96.0% |
+| 랜덤 봇 | 96.5% | 98.0% | 92.0% |
+| FSM 봇 | 70.0% | 87.5% | **90.5%** |
+
+| AI vs AI (승-패-무) | |
+|---|---|
+| physicsSP vs physicsB | **127-3-70** |
+| physicsSP vs physicsNG | **124-3-73** |
+| physicsSP vs 보상 B | 40-11-149 (동시 낙하 108) |
+| physicsNG vs physicsB | 49-91-60 |
+| physicsNG vs 보상 B | 6-177-17 |
+| physicsSP vs physicsSP | 29-37-134 |
+
+→ physicsNG는 잡지 않는 상대만 잘 이기고, 잡는 상대(러쉬 봇, 다른 AI)에게는 약하다.
+physicsSP는 물리만 규칙의 AI 중 가장 강하지만 (다른 AI 상대 승 > 패), 잡고 버티기가 더 강해져서 잡지 않는 러쉬 봇까지 붙잡고 무승부로 만든다.
+결국 악력 같은 장치가 없으면 모든 정책이 "잡고 안 놓기"로 모이고 경기의 절반 이상이 무승부가 된다.
 
 ## 폴더 구조
 

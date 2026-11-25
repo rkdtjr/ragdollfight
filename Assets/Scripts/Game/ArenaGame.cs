@@ -32,7 +32,9 @@ namespace RagdollFight
         /// <summary>설정 창에서 고르는 AI 모델 (Assets/Resources/파일이름.onnx)</summary>
         static readonly (string file, string label)[] AiModels =
         {
+            ("AI_PhysSP", "물리만 셀프플레이"),
             ("AI_PhysB", "물리만 보상 B"),
+            ("AI_PhysNG", "물리만 (잡지 않는 러쉬봇)"),
             ("AI_SP5M", "셀프플레이 500만"),
             ("AI_SP2M", "셀프플레이 200만"),
             ("AI_B", "보상 B"),
@@ -40,7 +42,7 @@ namespace RagdollFight
             ("AI_mix2", "mix2"),
         };
         int aiIndex;      // 파랑(P2) AI 모델
-        int p1AiIndex = 3; // AI끼리 관전할 때 빨강(P1) AI 모델
+        int p1AiIndex = 5; // AI끼리 관전할 때 빨강(P1) AI 모델
         bool settingsOpen;
         Vector2 settingsScroll;
 
