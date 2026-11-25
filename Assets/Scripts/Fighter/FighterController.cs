@@ -12,6 +12,8 @@ namespace RagdollFight
     ///  3) 머리 리프트: 머리 무게만큼 위로 당겨 고개가 처지지 않게 한다.
     /// 팔다리 관절 힘은 약하게 두어 흐물거리는 느낌을 낸다.
     /// </summary>
+    public enum RuleSet { Physics, Stamina }
+
     [RequireComponent(typeof(Ragdoll))]
     public class FighterController : MonoBehaviour
     {
@@ -70,6 +72,14 @@ namespace RagdollFight
         [Tooltip("들린 상대가 버둥거리면(이동 입력) 추가로 줄어드는 악력 (초당)")]
         public float struggleDrain = 0.1f;
 
+        [Header("Physics 모드: 팔 힘")]
+        [Tooltip("무언가를 잡고 있을 때 팔 관절 힘 (매달려 턱걸이하기·상대 들기를 팔 힘으로 한다)")]
+        public float gripArmStrength = 8f;
+        [Tooltip("매달려 있을 때 팔을 끝까지 내리면(armPitch = -1) 이 각도까지 민다. 음수 = 몸 뒤쪽 (턱걸이 후 몸을 밀어 올리는 머슬업)")]
+        public float hangPushPitch = -25f;
+        [Tooltip("매달려서 팔을 내릴 때 상체를 앞으로 숙이는 각도 (가장자리 위로 몸을 넘긴다)")]
+        public float hangLean = 50f;
+
         [Header("Hang & climb (가장자리 매달리기)")]
         public float climbUpSpeed = 6f;
         public float climbForwardSpeed = 2.5f;
@@ -104,6 +114,14 @@ namespace RagdollFight
         public bool IsKnockedOut => koTimer > 0f;
         /// <summary>악력 0~1. 잡고 있으면 줄고, 0이 되면 손이 풀린다.</summary>
         public float Stamina { get; private set; } = 1f;
+        /// <summary>
+        /// 게임 규칙 모드 (모든 파이터 공통).
+        ///  Physics: 원작(휴먼 폴 플랫·갱비스트)처럼 추가 룰 없이 물리만 — 악력 무한, 들기·기어오르기 모두 팔 힘으로,
+        ///           잡은 손은 세게 당겨지면 빠진다.
+        ///  Stamina: 악력 게이지 + 들기 보조 + 점프 기어오르기 (기존 학습 모델들이 이 규칙으로 학습됨).
+        /// </summary>
+        public static RuleSet Rules = RuleSet.Stamina;
+        public static bool PhysicsOnly => Rules == RuleSet.Physics;
         /// <summary>악력이 바닥나서 다시 잡을 수 없는 상태</summary>
         public bool IsExhausted { get; private set; }
 
@@ -154,8 +172,10 @@ namespace RagdollFight
             float c = Consciousness;
             if (liftedTimer > 0f) liftedTimer -= dt;
             if (grabBlockTimer > 0f) grabBlockTimer -= dt;
-            // 균형 힘 배율: 기절하면 0, 들려 있으면 크게 약해진다
-            float b = c * (IsLifted ? liftBalanceFactor : 1f);
+            // Physics 모드: 들려 있으면 발이 떠서 버티는 힘이 저절로 꺼지므로 별도 약화 룰이 없다
+            if (PhysicsOnly) liftedTimer = IsHeldByOpponent() && !IsGrounded ? 0.06f : 0f;
+            // 균형 힘 배율: 기절하면 0, (악력 모드) 들려 있으면 크게 약해진다
+            float b = c * (IsLifted && !PhysicsOnly ? liftBalanceFactor : 1f);
 
 
             var hips = Body[Part.Hips];
@@ -190,9 +210,12 @@ namespace RagdollFight
 
             // ── 2) 직립 토크 ──
             Quaternion targetRot = Quaternion.LookRotation(facing, Vector3.up);
+            // Physics 모드: 매달려서 팔을 내리면(턱걸이) 상체를 앞으로 숙여 가장자리 위로 넘긴다
+            if (PhysicsOnly && IsHanging && input.armPitch < 0f)
+                targetRot *= Quaternion.Euler(hangLean * Mathf.Clamp01(-input.armPitch), 0f, 0f);
             float dampScale = Mathf.Max(b, 0.3f);
             // 들려 있어도 몸통은 어느 정도 세운다. 상대를 잡고 있으면 그 무게에 숙여지지 않게 더 세게 버틴다.
-            float bu = c * (IsLifted ? liftUprightFactor : 1f);
+            float bu = c * (IsLifted && !PhysicsOnly ? liftUprightFactor : 1f);
             bool holdingFighter = LeftHand.GrabbedFighter != null || RightHand.GrabbedFighter != null;
             float brace = holdingFighter && !IsLifted ? holdBraceFactor : 1f;
             dampScale = Mathf.Max(bu, 0.3f) * Mathf.Sqrt(brace);
@@ -238,15 +261,18 @@ namespace RagdollFight
             // ── 팔: 잡기 버튼 = 팔을 앞으로 뻗기 (Human: Fall Flat 방식) ──
             float armSwing = 25f * speed01 * swing;
             UpdateStamina(dt);
-            float pitch = reachPitch + Mathf.Clamp(input.armPitch, -1f, 1f) * reachPitchRange;
+            float ap = Mathf.Clamp(input.armPitch, -1f, 1f);
+            float pitch = reachPitch + ap * reachPitchRange;
+            // Physics 모드에서 매달려 있으면 팔을 몸 뒤쪽까지 밀어 내려 몸을 가장자리 위로 올린다
+            if (PhysicsOnly && IsHanging && ap < 0f) pitch = Mathf.Lerp(reachPitch, hangPushPitch, -ap);
             bool canGrab = !IsExhausted && grabBlockTimer <= 0f;
             SetArm(Part.UpperArmL, Part.LowerArmL, LeftHand, input.grabLeft && canGrab, pitch, armSwing, c);
             SetArm(Part.UpperArmR, Part.LowerArmR, RightHand, input.grabRight && canGrab, pitch, -armSwing, c);
             LeftHand.ValidateWorldGrip();
             RightHand.ValidateWorldGrip();
 
-            // ── 들어올리기: 상대를 잡은 채 팔을 위로 ──
-            if (input.armPitch >= liftPitchThreshold && c > 0.5f)
+            // ── 들어올리기: 상대를 잡은 채 팔을 위로 ── (Physics 모드는 팔 힘만으로 든다)
+            if (!PhysicsOnly && input.armPitch >= liftPitchThreshold && c > 0.5f)
             {
                 bool struggling = false;
                 int liftingHands = LiftWith(LeftHand, g, ref struggling) + LiftWith(RightHand, g, ref struggling);
@@ -278,7 +304,17 @@ namespace RagdollFight
                     jumpTimer = jumpCooldown;
                     Stamina -= jumpStaminaCost;
                 }
-                else if (IsHanging && Stamina > 0.05f)
+                else if (IsHanging && PhysicsOnly && FeetTouchWall())
+                {
+                    // Physics 모드: 발로 벽을 차면서 손을 놓고 뛰어오른다. 힘은 땅 점프와 같고,
+                    // 가장자리 안쪽으로 들어가는 건 일반 공중 이동(이동 키)으로 해야 한다.
+                    LeftHand.Release();
+                    RightHand.Release();
+                    grabBlockTimer = 0.25f; // 뛰는 순간 같은 가장자리를 다시 잡지 않게
+                    foreach (var rb in Body.bodies) rb.AddForce(Vector3.up * jumpSpeed, ForceMode.VelocityChange);
+                    jumpTimer = jumpCooldown;
+                }
+                else if (IsHanging && !PhysicsOnly && Stamina > 0.05f)
                 {
                     // 기어오르기: 잡은 지점 쪽 위로 몸을 튕겨 올린다
                     Vector3 anchor = LeftHand.IsGrabbingWorld ? LeftHand.WorldAnchor : RightHand.WorldAnchor;
@@ -300,6 +336,11 @@ namespace RagdollFight
             }
         }
 
+        /// <summary>다리(종아리)가 벽 같은 고정 물체에 닿아 있는지 (벽 차기용). 종아리 반지름 0.1 + 여유 0.2</summary>
+        bool FeetTouchWall() =>
+            Physics.CheckSphere(Body[Part.LowerLegL].position, 0.3f, GroundMask, QueryTriggerInteraction.Ignore) ||
+            Physics.CheckSphere(Body[Part.LowerLegR].position, 0.3f, GroundMask, QueryTriggerInteraction.Ignore);
+
         int LiftWith(HandGrabber hand, float g, ref bool struggling)
         {
             var victim = hand.GrabbedFighter;
@@ -318,6 +359,7 @@ namespace RagdollFight
 
         void UpdateStamina(float dt)
         {
+            if (PhysicsOnly) { Stamina = 1f; IsExhausted = false; return; }
             int holding = (LeftHand.IsGrabbing ? 1 : 0) + (RightHand.IsGrabbing ? 1 : 0);
             if (holding > 0) Stamina -= gripDrainPerHand * holding * dt;
             else Stamina += gripRegen * dt;
@@ -341,8 +383,10 @@ namespace RagdollFight
             else hand.TryGrabNearby();
             if (reach)
             {
-                Body.SetDrive(upper, Quaternion.Euler(-pitch, 0f, 0f), armReachStrength * c);
-                Body.SetDrive(lower, Quaternion.identity, armReachStrength * c);
+                // Physics 모드: 잡고 있는 팔은 힘을 준다 (턱걸이·들기). 악력 모드는 기존 힘 그대로.
+                float s = (PhysicsOnly && hand.IsGrabbing ? gripArmStrength : armReachStrength) * c;
+                Body.SetDrive(upper, Quaternion.Euler(-pitch, 0f, 0f), s);
+                Body.SetDrive(lower, Quaternion.identity, s);
             }
             else
             {
@@ -376,6 +420,15 @@ namespace RagdollFight
         }
 
         public bool Owns(Rigidbody rb) => Body != null && Body.Owns(rb);
+
+        /// <summary>상대 손이 내 몸을 잡고 있는지</summary>
+        bool IsHeldByOpponent()
+        {
+            if (heldBy.Count == 0) return false;
+            heldBy.RemoveWhere(h => h == null || h.GrabbedFighter != this);
+            return heldBy.Count > 0;
+        }
+        internal readonly System.Collections.Generic.HashSet<HandGrabber> heldBy = new System.Collections.Generic.HashSet<HandGrabber>();
 
         /// <summary>라운드·에피소드 시작 시 자세·상태를 초기화한다.</summary>
         public void ResetFighter(Vector3 position, Quaternion rotation)

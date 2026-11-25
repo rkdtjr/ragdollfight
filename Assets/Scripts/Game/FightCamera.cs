@@ -28,6 +28,9 @@ namespace RagdollFight
         public Rigidbody target;            // 따라갈 대상 (P1 엉덩이)
         public System.Func<Vector3> overviewFocus;
 
+        /// <summary>설정 창이 열려 있으면 커서를 잠그지 않는다 (버튼을 눌러야 하니까)</summary>
+        public static bool MenuOpen;
+
         public float Yaw { get; private set; }
         float pitch = 18f;
         Vector3 pivot, pivotVel, overviewVel;
@@ -57,7 +60,8 @@ namespace RagdollFight
                 mode = mode == Mode.ThirdPerson ? Mode.Overview : Mode.ThirdPerson;
 
             // 3인칭에서는 커서를 숨기고 고정한다. Esc로 풀고, 클릭하면 다시 잠근다.
-            if (mode == Mode.ThirdPerson)
+            if (MenuOpen) Cursor.lockState = CursorLockMode.None;
+            else if (mode == Mode.ThirdPerson)
             {
                 if (Input.GetKeyDown(KeyCode.Escape)) Cursor.lockState = CursorLockMode.None;
                 else if (Input.GetMouseButtonDown(0) || Input.GetMouseButtonDown(1)) Cursor.lockState = CursorLockMode.Locked;

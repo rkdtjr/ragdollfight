@@ -13,6 +13,8 @@ namespace RagdollFight
         public FighterController owner;
         public bool wantGrab;
         public float breakForce = 6000f;
+        [Tooltip("Physics 모드에서 손이 빠지는 힘 (N). 악력 게이지 대신 세게 잡아채면 놓친다.")]
+        public float physicsBreakForce = 1500f;
         public float grabRadius = 0.16f;
         [Tooltip("바닥·벽 같은 고정 물체도 잡을 수 있는지")]
         public bool allowWorldGrab = true;
@@ -27,7 +29,18 @@ namespace RagdollFight
         public bool IsGrabbingWorld => joint != null && worldCollider != null;
         public Rigidbody Grabbed => joint != null ? joint.connectedBody : null;
         /// <summary>상대 파이터를 잡고 있는지 (보상·관측용)</summary>
-        public FighterController GrabbedFighter { get; private set; }
+        public FighterController GrabbedFighter
+        {
+            get => grabbedFighter;
+            private set
+            {
+                if (grabbedFighter == value) return;
+                if (grabbedFighter != null) grabbedFighter.heldBy.Remove(this);
+                grabbedFighter = value;
+                if (grabbedFighter != null) grabbedFighter.heldBy.Add(this);
+            }
+        }
+        FighterController grabbedFighter;
 
         /// <summary>손끝 위치 (아래팔 캡슐의 끝).</summary>
         public Vector3 TipPosition => transform.TransformPoint(0f, -1f, 0f);
@@ -63,8 +76,9 @@ namespace RagdollFight
             var target = best.attachedRigidbody;
             joint = gameObject.AddComponent<FixedJoint>();
             joint.connectedBody = target; // null이면 월드(그 자리)에 고정된다
-            joint.breakForce = breakForce;
-            joint.breakTorque = breakForce;
+            float bf = FighterController.PhysicsOnly ? physicsBreakForce : breakForce;
+            joint.breakForce = bf;
+            joint.breakTorque = bf;
             joint.enableCollision = false;
             if (target != null)
             {

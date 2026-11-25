@@ -237,6 +237,105 @@ namespace RagdollFight.EditorTools
                 input.value = default;
                 Run(200);
                 Check("climb up", hips.position.y > 0.6f && hips.position.x < -0.1f, $"after climb hip=({hips.position.x:F2}, {hips.position.y:F2})");
+
+                // ── Physics 모드 (추가 룰 없음): 악력 무한, 팔 힘으로 기어오르기·들기 ──
+                var prevRules = FighterController.Rules;
+                FighterController.Rules = RuleSet.Physics;
+                var cl = System.Environment.GetCommandLineArgs();
+                for (int i = 0; i < cl.Length - 1; i++)
+                    if (cl[i] == "-gripArm" && float.TryParse(cl[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float ga)) fc.gripArmStrength = ga;
+                Debug.Log($"[SelfTest] physics mode, gripArmStrength={fc.gripArmStrength}");
+                try
+                {
+                    // P1) 매달린 뒤 팔을 내려(턱걸이) 몸을 끌어올리고, 가장자리 쪽으로 몸을 넘긴다
+                    fc.ResetFighter(new Vector3(-0.5f, 0.05f, 0f), Quaternion.LookRotation(Vector3.left));
+                    input.value = default;
+                    Run(50);
+                    input.value = new FighterInput { move = new Vector2(1f, 0f), aim = new Vector2(-1f, 0f), grabLeft = true, grabRight = true };
+                    hung = false;
+                    for (int s = 0; s < 250; s++)
+                    {
+                        fc.Step(dt); Physics.Simulate(dt);
+                        if (!fc.IsGrounded && !hung) input.value = new FighterInput { aim = new Vector2(-1f, 0f), grabLeft = true, grabRight = true };
+                        if (fc.IsHanging) hung = true;
+                    }
+                    Check("[physics] hang", hung && fc.IsHanging, $"hanging={fc.IsHanging}, hipY={hips.position.y:F2}");
+                    // 버티기: 3초 매달려 있어도 손이 빠지지 않는다 (악력 소모 없음)
+                    Run(300);
+                    Check("[physics] hang 3s", fc.IsHanging, $"hanging={fc.IsHanging}, stamina={fc.Stamina:F2}");
+
+                    // 턱걸이: 팔을 위(+1)에서 아래(-1)로 천천히 내린다
+                    float peakChest = chest.position.y;
+                    for (int s = 0; s < 150; s++)
+                    {
+                        float p = Mathf.Lerp(1f, -1f, s / 100f);
+                        input.value = new FighterInput { aim = new Vector2(-1f, 0f), grabLeft = true, grabRight = true, armPitch = p, move = new Vector2(-1f, 0f) };
+                        fc.Step(dt); Physics.Simulate(dt);
+                        peakChest = Mathf.Max(peakChest, chest.position.y);
+                        if (s % 25 == 0) Debug.Log($"[SelfTest]   pull s={s} pitch={p:F2} hip=({hips.position.x:F2},{hips.position.y:F2}) chestY={chest.position.y:F2} grounded={fc.IsGrounded} hanging={fc.IsHanging}");
+                    }
+                    Check("[physics] pull up", peakChest > 0.15f, $"peak chestY={peakChest:F2} (ledge top 0)");
+                    // 벽 차기(점프) 한 번 + 계속 팔을 민 채 안쪽으로 → 엉덩이가 가장자리 위로 오면 손을 놓고 걸어 들어간다
+                    var pull = input.value;
+                    input.value = new FighterInput { aim = pull.aim, grabLeft = true, grabRight = true, armPitch = -1f, move = pull.move, jump = true };
+                    fc.Step(dt); Physics.Simulate(dt);
+                    input.value = new FighterInput { aim = pull.aim, move = pull.move }; // 손 놓고 안쪽으로
+                    for (int s = 0; s < 200; s++)
+                    {
+                        fc.Step(dt); Physics.Simulate(dt);
+                        if (s % 25 == 0) Debug.Log($"[SelfTest]   over s={s} hip=({hips.position.x:F2},{hips.position.y:F2}) chestY={chest.position.y:F2} grounded={fc.IsGrounded} hanging={fc.IsHanging}");
+                        if (fc.IsGrounded) break;
+                    }
+                    input.value = new FighterInput { aim = new Vector2(-1f, 0f), move = new Vector2(-1f, 0f) };
+                    Run(150);
+                    input.value = default;
+                    Run(100);
+                    Check("[physics] climb up", hips.position.y > 0.6f && hips.position.x < -0.1f, $"after climb hip=({hips.position.x:F2}, {hips.position.y:F2})");
+
+                    // P2) 팔 힘으로 상대 들기 / 잡고 끌기 (손이 빠지지 않아야 함)
+                    Object.DestroyImmediate(ledge);
+                    var floor2 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    floor2.transform.localScale = new Vector3(40f, 1f, 40f);
+                    floor2.transform.position = new Vector3(0f, -0.5f, 0f);
+                    var other2 = Ragdoll.Create("Dummy2", new Vector3(0f, 0.05f, 1.0f), Quaternion.Euler(0f, 180f, 0f), Color.blue);
+                    var ofc2 = other2.gameObject.AddComponent<FighterController>();
+                    ofc2.Init();
+                    ofc2.autoStep = false;
+                    ofc2.InputSource = new ScriptedInput();
+                    void RunBoth2(int steps) { for (int s = 0; s < steps; s++) { fc.Step(dt); ofc2.Step(dt); Physics.Simulate(dt); } }
+                    fc.ResetFighter(new Vector3(0f, 0.05f, 0f), Quaternion.identity);
+                    input.value = default;
+                    RunBoth2(50);
+                    input.value = new FighterInput { grabLeft = true, grabRight = true };
+                    RunBoth2(100);
+                    float oz0 = other2[Part.Hips].position.z;
+                    input.value = new FighterInput { grabLeft = true, grabRight = true, move = new Vector2(0f, -1f) };
+                    RunBoth2(200);
+                    bool stillHolding = fc.LeftHand.GrabbedFighter == ofc2 || fc.RightHand.GrabbedFighter == ofc2;
+                    Check("[physics] drag", oz0 - other2[Part.Hips].position.z > 1.0f && stillHolding,
+                        $"dragged {oz0 - other2[Part.Hips].position.z:F2}m, holding={stillHolding}");
+                    // 6초 잡고 있어도 안 풀린다 (악력 무한)
+                    input.value = new FighterInput { grabLeft = true, grabRight = true };
+                    RunBoth2(600);
+                    stillHolding = fc.LeftHand.GrabbedFighter == ofc2 || fc.RightHand.GrabbedFighter == ofc2;
+                    Check("[physics] hold 6s", stillHolding, $"holding={stillHolding}");
+
+                    float oh0 = other2[Part.Hips].position.y;
+                    input.value = new FighterInput { grabLeft = true, grabRight = true, armPitch = 1f };
+                    float rise = 0f; bool lifted = false;
+                    for (int s = 0; s < 150; s++)
+                    {
+                        fc.Step(dt); ofc2.Step(dt); Physics.Simulate(dt);
+                        rise = Mathf.Max(rise, other2[Part.Hips].position.y - oh0);
+                        lifted |= ofc2.IsLifted;
+                    }
+                    Check("[physics] lift by arms", rise > 0.1f, $"opp hip rise={rise:F2}m, lifted(feet off)={lifted}, lifter hipY={hips.position.y:F2} tilt={Tilt(chest):F0}°");
+                    input.value = default;
+                    RunBoth2(150);
+                    Check("[physics] stand after lift", hips.position.y > 0.65f && other2[Part.Hips].position.y > 0.6f,
+                        $"lifter hipY={hips.position.y:F2}, opp hipY={other2[Part.Hips].position.y:F2}");
+                }
+                finally { FighterController.Rules = prevRules; }
             }
             catch (System.Exception e)
             {

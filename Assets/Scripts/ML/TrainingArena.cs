@@ -29,7 +29,7 @@ namespace RagdollFight
         public FighterAgent Agent { get; private set; }
         public FighterController[] Fighters { get; } = new FighterController[2];
 
-        public enum Bot { Rush, Grab, Random }
+        public enum Bot { Rush, Grab, Random, Fsm } // Fsm = 평가 전용 (BotWeights에 없어서 학습 때는 안 나온다)
         /// <summary>판마다 상대 봇을 뽑는 비율 (Rush, Grab, Random)</summary>
         public static float[] BotWeights = { 0.4f, 0.4f, 0.2f };
         /// <summary>평가 때 한 종류만 쓰려면 지정 (null = 섞어서)</summary>
@@ -85,6 +85,7 @@ namespace RagdollFight
             {
                 Bot.Grab => new GrabBotInput(Fighters[1], Fighters[0], this),
                 Bot.Random => new RandomBotInput(Fighters[1]),
+                Bot.Fsm => new FsmBotInput(Fighters[1], Fighters[0], this),
                 _ => new RushBotInput(Fighters[1], Fighters[0]),
             };
 

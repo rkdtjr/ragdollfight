@@ -63,12 +63,13 @@ namespace RagdollFight
                 if (args[i] == "-shaping") Shaping = args[i + 1] != "0";
                 if (args[i] == "-mutualFall" && float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float mf)) MutualFallReward = mf;
                 if (args[i] == "-model") modelName = args[i + 1];
+                if (args[i] == "-rules" && System.Enum.TryParse(args[i + 1], true, out RuleSet rs)) FighterController.Rules = rs;
                 if (args[i] == "-selfplay" && float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sp)) SelfPlayRatio = sp;
                 if (args[i] == "-opponentModel") opponentModelName = args[i + 1];
                 if (args[i] == "-bot" && System.Enum.TryParse(args[i + 1], true, out TrainingArena.Bot b)) TrainingArena.ForcedBot = b;
             }
 
-            Debug.Log($"[Reward] shaping={(Shaping ? "B" : "A")} mutualFall={MutualFallReward} selfplay={SelfPlayRatio}");
+            Debug.Log($"[Reward] shaping={(Shaping ? "B" : "A")} mutualFall={MutualFallReward} selfplay={SelfPlayRatio} rules={FighterController.Rules}");
             int selfPlayArenas = evalGames > 0 ? 0 : Mathf.RoundToInt(arenaCount * SelfPlayRatio);
             Unity.InferenceEngine.ModelAsset model = null;
             if (evalGames > 0)
@@ -77,7 +78,7 @@ namespace RagdollFight
                 if (opponentModelName != null)
                     TrainingArena.OpponentModel = Resources.Load<Unity.InferenceEngine.ModelAsset>(opponentModelName);
                 string vs = opponentModelName != null ? $"AI {opponentModelName}" : (TrainingArena.ForcedBot?.ToString() ?? "mix");
-                Debug.Log($"[Eval] {evalGames} games, {modelName} vs {vs}");
+                Debug.Log($"[Eval] {evalGames} games, {modelName} vs {vs}, rules={FighterController.Rules}");
                 if (model == null || (opponentModelName != null && TrainingArena.OpponentModel == null))
                 {
                     Debug.LogError("[Eval] model not found in Resources");
